@@ -76,16 +76,19 @@ Enterprise-grade security and error handling:
 ### Critical Improvements
 
 ✅ **Memory Optimization**
+
 - Batch processing (configurable batch size, default: 50 files)
 - 16KB chunk streaming for large files
 - Memory-efficient graph data structures
 
 ✅ **AST-Based Parsing**
+
 - Uses `@typescript-eslint/parser` for TypeScript/JavaScript
 - Uses `@babel/parser` for React/JSX files
 - Handles complex patterns: chained calls, arrow functions, async/await, class methods
 
 ✅ **Comprehensive Import Resolution**
+
 - Resolves TypeScript path aliases from `tsconfig.json`
 - Resolves `node_modules` imports
 - Handles relative and absolute paths
@@ -94,24 +97,28 @@ Enterprise-grade security and error handling:
 ### Significant Improvements
 
 ✅ **Incremental Updates**
+
 - File watching with automatic reindexing
 - SHA-256 content hashing for change detection
 - Only reprocesses modified files
 - Preserves existing graph data for unchanged files
 
 ✅ **Fuzzy Search & Query Intelligence**
+
 - Fuse.js integration for fuzzy matching
 - Query intent detection (7 patterns)
 - TF-IDF relevance scoring
 - File type filtering based on query context
 
 ✅ **Error Recovery & Logging**
+
 - Comprehensive error tracking per file
 - Interactive HTML report viewer
 - Error categorization (parse errors, security issues, etc.)
 - Graceful degradation on file errors
 
 ✅ **Security Sanitization**
+
 - 11 secret detection patterns
 - Severity levels (high/medium/low)
 - Automatic redaction with `[REDACTED]`
@@ -120,18 +127,21 @@ Enterprise-grade security and error handling:
 ### Architectural Excellence
 
 ✅ **Modular Architecture**
+
 - 11 focused modules organized by responsibility
 - 34% code reduction (from 2,245 to 1,474 lines)
 - SOLID principles throughout
 - Dependency injection for testability
 
 ✅ **VSCode API Decoupling**
+
 - Adapter pattern with interfaces (IWorkspace, IProgress, ICancellationToken)
 - 73% of code is VSCode-independent
 - 85% test coverage potential
 - Reusable in non-VSCode contexts (CLI tools, servers)
 
 ✅ **Cancellation Support**
+
 - 5 strategic cancellation checkpoints
 - Before each batch, inside loops
 - Graceful cleanup on cancellation
@@ -155,22 +165,26 @@ code --install-extension copilot-extnsn-1.0.0.vsix
 ### Method 2: Development Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/yourusername/copilot-extnsn.git
 cd copilot-extnsn
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Compile TypeScript:
+
 ```bash
 npm run compile
 ```
 
 4. Launch development instance:
+
 - Press `F5` in VS Code
 - Or run: `code --extensionDevelopmentPath=/path/to/copilot-extnsn`
 
@@ -185,6 +199,7 @@ npm run compile
 Generates a complete index of your codebase.
 
 **Steps**:
+
 1. Open your workspace in VS Code
 2. Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
 3. Type: `LogicGraph: Generate Index`
@@ -192,6 +207,7 @@ Generates a complete index of your codebase.
 5. Wait for completion
 
 **Output Files**:
+
 - `quick_index.json` - Lightweight codebase overview (5-50KB)
 - `search_index.json` - Detailed symbol locations (50-200KB)
 - `context-graph.json` - Complete graph structure (for advanced use)
@@ -205,6 +221,7 @@ Generates a complete index of your codebase.
 Search your codebase using natural language queries.
 
 **Steps**:
+
 1. Press `Cmd+Shift+P`
 2. Type: `LogicGraph: Query Codebase`
 3. Enter your query, examples:
@@ -214,6 +231,7 @@ Search your codebase using natural language queries.
    - "user interface components"
 
 **Output**:
+
 - Top 20 most relevant results
 - Symbol name, type, file path, line number
 - Relevance score for each result
@@ -227,6 +245,7 @@ Search your codebase using natural language queries.
 Update the index for modified files only (much faster than full reindex).
 
 **Steps**:
+
 1. Make changes to your code files
 2. Press `Cmd+Shift+P`
 3. Type: `LogicGraph: Incremental Update`
@@ -243,6 +262,7 @@ Update the index for modified files only (much faster than full reindex).
 View detailed indexing statistics and error report.
 
 **Shows**:
+
 - Files processed, symbols found, imports resolved
 - Security issues detected (with severity)
 - Parse errors and warnings
@@ -286,47 +306,55 @@ src/
 #### Core Modules (VSCode-Independent)
 
 **1. Indexer** (`indexer/Indexer.ts`)
+
 - Core indexing engine with dependency injection
 - Processes files in batches with progress reporting
 - Cancellation support at 5 checkpoints
 - Returns: `{ graph, report, fileHashes }`
 
 **2. FileScanner** (`indexer/FileScanner.ts`)
+
 - Discovers code files recursively
 - Respects `.gitignore` patterns
 - Supports 16 file extensions
 - Memory-efficient directory traversal
 
 **3. FuzzySearcher** (`search/FuzzySearcher.ts`)
+
 - Fuzzy matching with Fuse.js
 - TF-IDF scoring for relevance
 - File type filtering
 - Returns top 20 results
 
 **4. QueryAnalyzer** (`search/QueryAnalyzer.ts`)
+
 - Detects query intent (7 patterns)
 - Extracts keywords and entities
 - Suggests search strategies
 - File type prediction
 
 **5. SecuritySanitizer** (`security/SecuritySanitizer.ts`)
+
 - 11 secret detection patterns
 - Severity classification (high/medium/low)
 - Automatic redaction
 - Detailed security reports
 
 **6. IncrementalUpdater** (`incremental/IncrementalUpdater.ts`)
+
 - SHA-256 file hashing
 - Change detection
 - Selective reindexing
 - Hash cache management
 
 **7. FileHasher** (`utils/FileHasher.ts`)
+
 - SHA-256 content hashing
 - Efficient file reading
 - Error handling
 
 **8. Types** (`types/index.ts`)
+
 - Centralized type definitions
 - Interfaces for all modules
 - VSCode-agnostic interfaces (IWorkspace, IProgress, ICancellationToken)
@@ -334,17 +362,20 @@ src/
 #### VSCode-Specific Modules
 
 **9. VSCodeAdapter** (`adapters/VSCodeAdapter.ts`)
+
 - Abstracts VSCode APIs behind interfaces
 - Enables testing with mocks
 - Classes: VSCodeWorkspaceAdapter, VSCodeProgressAdapter, VSCodeCancellationTokenAdapter
 
 **10. VSCodeHelpers** (`vscode/VSCodeHelpers.ts`)
+
 - VSCode LSP integration
 - Symbol extraction using `executeDocumentSymbolProvider`
 - Definition lookups using `executeDefinitionProvider`
 - HTML report webview generation
 
 **11. Extension** (`extension.ts`)
+
 - Extension activation and command registration
 - Orchestrates all modules
 - Manages file watcher
@@ -371,15 +402,47 @@ src/
 ### Supported File Extensions (20+)
 
 ```typescript
-['.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.go', '.rs', '.cs', '.cpp', 
- '.c', '.h', '.hpp', '.php', '.rb', '.swift', '.kt', '.scala', '.vue', '.svelte']
+[
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".py",
+  ".java",
+  ".go",
+  ".rs",
+  ".cs",
+  ".cpp",
+  ".c",
+  ".h",
+  ".hpp",
+  ".php",
+  ".rb",
+  ".swift",
+  ".kt",
+  ".scala",
+  ".vue",
+  ".svelte",
+];
 ```
 
 ### Excluded Directories (Automatic)
 
 ```typescript
-['node_modules', '.git', 'dist', 'build', 'out', '.next', 
- 'venv', '__pycache__', 'target', 'bin', 'obj', 'coverage']
+[
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  "out",
+  ".next",
+  "venv",
+  "__pycache__",
+  "target",
+  "bin",
+  "obj",
+  "coverage",
+];
 ```
 
 ### Batch Size Configuration
@@ -387,6 +450,7 @@ src/
 Default: **50 files per batch**
 
 To modify, edit `src/extension.ts`:
+
 ```typescript
 const config: GraphConfig = {
   batchSize: 100, // Increase for faster processing (more memory)
@@ -418,6 +482,7 @@ build/
 **Size**: 5-50KB (very small!)
 
 **Structure**:
+
 ```json
 {
   "_description": "Quick Index: Lightweight codebase overview",
@@ -453,15 +518,14 @@ build/
 **Size**: 50-200KB
 
 **Structure**:
+
 ```json
 {
   "_description": "Search Index: Detailed symbol locations",
   "summary": {
     "totalSymbols": 1243,
     "totalImports": 456,
-    "topFiles": [
-      { "path": "/src/utils/helper.ts", "symbolCount": 45 }
-    ]
+    "topFiles": [{ "path": "/src/utils/helper.ts", "symbolCount": 45 }]
   },
   "symbolLocations": [
     {
@@ -509,19 +573,19 @@ build/
 
 ### Indexing Performance
 
-| Project Size | Files | Time | Memory |
-|-------------|-------|------|--------|
-| Small | 50-100 files | ~1-2s | ~50MB |
-| Medium | 200-500 files | ~3-6s | ~100MB |
-| Large | 1000+ files | ~8-15s | ~200MB |
+| Project Size | Files         | Time   | Memory |
+| ------------ | ------------- | ------ | ------ |
+| Small        | 50-100 files  | ~1-2s  | ~50MB  |
+| Medium       | 200-500 files | ~3-6s  | ~100MB |
+| Large        | 1000+ files   | ~8-15s | ~200MB |
 
 ### Incremental Update Performance
 
-| Changes | Time | Memory |
-|---------|------|--------|
-| 1-5 files | ~100-200ms | ~20MB |
-| 10-20 files | ~300-500ms | ~40MB |
-| 50+ files | ~1-2s | ~80MB |
+| Changes     | Time       | Memory |
+| ----------- | ---------- | ------ |
+| 1-5 files   | ~100-200ms | ~20MB  |
+| 10-20 files | ~300-500ms | ~40MB  |
+| 50+ files   | ~1-2s      | ~80MB  |
 
 ### Query Performance
 
@@ -548,18 +612,21 @@ build/
 LogicGraph automatically detects and redacts sensitive information:
 
 #### High Severity
+
 1. **API Keys**: `api[_-]?key['"]?\s*[:=]\s*['"][A-Za-z0-9]{20,}['"]`
 2. **AWS Access Keys**: `AKIA[0-9A-Z]{16}`
 3. **JWT Tokens**: `eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+`
 4. **GitHub Tokens**: `ghp_[A-Za-z0-9]{36,}`
 
 #### Medium Severity
+
 5. **Password Assignments**: `password\s*[:=]\s*['"][^'"]{8,}['"]`
 6. **Secret Assignments**: `secret\s*[:=]\s*['"][^'"]{8,}['"]`
 7. **Database URLs**: Connection strings with credentials
 8. **Private Keys**: RSA/SSH private keys
 
 #### Low Severity
+
 9. **Bearer Tokens**: Authorization headers
 10. **Base64 Secrets**: Long base64 encoded strings
 11. **Hexadecimal Keys**: Long hex strings (40+ chars)
@@ -567,11 +634,13 @@ LogicGraph automatically detects and redacts sensitive information:
 ### Redaction Example
 
 **Before**:
+
 ```javascript
 const apiKey = "sk-1234567890abcdefghijklmnopqrstuvwxyz";
 ```
 
 **After**:
+
 ```javascript
 const apiKey = "[REDACTED]";
 ```
@@ -579,6 +648,7 @@ const apiKey = "[REDACTED]";
 ### Security Report
 
 View detected secrets in the Indexing Report:
+
 - Total secrets found
 - Severity breakdown
 - File locations
@@ -611,21 +681,25 @@ npm run compile
 ### Development Workflow
 
 **1. Watch Mode** (Auto-compile on save):
+
 ```bash
 npm run watch
 ```
 
 **2. Launch Extension** (F5):
+
 - Opens Extension Development Host
 - Hot reload on code changes
 - Debug console available
 
 **3. Run Tests**:
+
 ```bash
 npm run test
 ```
 
 **4. Lint Code**:
+
 ```bash
 npm run lint
 ```
@@ -645,12 +719,14 @@ npm run lint
 ### Dependencies
 
 **Production**:
+
 - `@typescript-eslint/parser` (^5.62.0) - TypeScript AST parsing
 - `@babel/parser` (^7.28.5) - JavaScript/JSX AST parsing
 - `fuse.js` (^7.1.0) - Fuzzy search
 - `ignore` (^7.0.5) - .gitignore parsing
 
 **Development**:
+
 - `@types/vscode` (^1.75.0) - VS Code API types
 - `@types/node` (^18.0.0) - Node.js types
 - `typescript` (^5.0.0) - TypeScript compiler
@@ -677,6 +753,7 @@ vsce publish
 ### Debugging
 
 **Launch Configuration** (`.vscode/launch.json`):
+
 ```json
 {
   "type": "extensionHost",
@@ -690,6 +767,7 @@ vsce publish
 ```
 
 **Debug Tips**:
+
 - Set breakpoints in TypeScript files
 - Use Debug Console for evaluation
 - Check Output panel for logs
@@ -807,6 +885,7 @@ A: Check that file watcher is active. Try manual incremental update command. Ver
 ### Inspiration
 
 This extension implements similar architecture to:
+
 - GitHub Copilot (static index + dynamic search)
 - Sourcegraph (code intelligence)
 - Codeium (context-aware AI)
@@ -864,4 +943,4 @@ Vote for features on [GitHub Issues](https://github.com/yourusername/copilot-ext
 
 **Built with ❤️ for developers who want production-grade codebase intelligence**
 
-*Questions? Open an issue on [GitHub](https://github.com/yourusername/copilot-extnsn)*
+_Questions? Open an issue on [GitHub](https://github.com/yourusername/copilot-extnsn)_
