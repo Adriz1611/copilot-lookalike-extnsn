@@ -1,0 +1,44 @@
+{
+  "name": "copilot-extnsn",
+  "displayName": "Copilot Extension - Context Graph Generator",
+  "description": "Generate hierarchical context graphs using LSP for AI-assisted development",
+  "version": "1.0.0",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:logicGraph.generateContextJSON"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "logicGraph.generateContextJSON",
+        "title": "LogicGraph: Generate Index (Phase 1)"
+      },
+      {
+        "command": "logicGraph.queryCodebase",
+        "title": "LogicGraph: Query Codebase (Phase 2+3)"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}
