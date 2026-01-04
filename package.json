@@ -23,6 +23,14 @@
       {
         "command": "logicGraph.queryCodebase",
         "title": "LogicGraph: Query Codebase (Phase 2+3)"
+      },
+      {
+        "command": "logicGraph.incrementalUpdate",
+        "title": "LogicGraph: Incremental Update"
+      },
+      {
+        "command": "logicGraph.viewReport",
+        "title": "LogicGraph: View Indexing Report"
       }
     ]
   },
@@ -34,11 +42,14 @@
     "lint": "eslint src --ext ts"
   },
   "devDependencies": {
+    "@babel/parser": "^7.28.5",
     "@types/node": "^18.0.0",
     "@types/vscode": "^1.75.0",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
-    "@typescript-eslint/parser": "^5.0.0",
+    "@typescript-eslint/parser": "^5.62.0",
     "eslint": "^8.0.0",
+    "fuse.js": "^7.1.0",
+    "ignore": "^7.0.5",
     "typescript": "^5.0.0"
   }
 }
