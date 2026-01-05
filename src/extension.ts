@@ -59,16 +59,12 @@ interface ExtensionState {
 export function activate(context: vscode.ExtensionContext) {
     const timestamp = () => new Date().toISOString().split('T')[1].slice(0, 8);
     
-    console.log('LogicGraph extension activated!');
-
-    // Create output channel for debugging
     const outputChannel = vscode.window.createOutputChannel('LogicGraph');
     outputChannel.appendLine(`[${timestamp()}] LogicGraph extension activated`);
     outputChannel.appendLine(`[${timestamp()}] Version: ${context.extension.packageJSON.version || '1.0.0'}`);
     outputChannel.appendLine(`[${timestamp()}] Workspace: ${vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || 'none'}`);
     outputChannel.appendLine('---');
     
-    // Create status bar item
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.text = '$(search) LogicGraph';
     statusBarItem.tooltip = 'LogicGraph: Not Indexed';
@@ -85,13 +81,11 @@ export function activate(context: vscode.ExtensionContext) {
         statusBarItem
     };
 
-    // Initialize core modules
     const fileScanner = new FileScanner();
     const securitySanitizer = new SecuritySanitizer();
     const fuzzySearcher = new FuzzySearcher();
     const queryAnalyzer = new QueryAnalyzer();
     
-    // Initialize Copilot orchestrator (lazy initialization)
     state.copilotOrchestrator = new CopilotIntelligenceOrchestrator();
 
     // Command: Generate full index
@@ -210,7 +204,6 @@ async function generateIndexWithProgress(
                         state.outputChannel.appendLine(`[Tree-sitter] ✅ Enhancement complete in ${enhanceDuration}ms`);
                     } catch (error) {
                         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-                        console.warn('[Tree-sitter] Enhancement failed:', error);
                         state.outputChannel.appendLine(`[Tree-sitter] ⚠️ Enhancement failed: ${errorMsg}`);
                     }
                 }
@@ -249,7 +242,6 @@ async function generateIndexWithProgress(
                         state.outputChannel.appendLine(`[Copilot] Graph: ${JSON.stringify(stats.graph)}`);
                     } catch (error) {
                         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-                        console.warn('[Copilot] Initialization failed:', error);
                         state.outputChannel.appendLine(`[Copilot] ❌ Initialization failed: ${errorMsg}`);
                         if (error instanceof Error && error.stack) {
                             state.outputChannel.appendLine(`[Copilot] Stack: ${error.stack}`);
@@ -665,6 +657,4 @@ function setupFileWatcher(context: vscode.ExtensionContext, state: ExtensionStat
     context.subscriptions.push(watcher);
 }
 
-export function deactivate() {
-    console.log('LogicGraph extension deactivated');
-}
+export function deactivate() {}

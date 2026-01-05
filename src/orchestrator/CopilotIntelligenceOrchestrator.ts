@@ -81,10 +81,7 @@ export class CopilotIntelligenceOrchestrator {
      * Must be called before query processing
      */
     public async initialize(workspacePath: string): Promise<void> {
-        console.log('CopilotIntelligenceOrchestrator: Initializing...');
-
         try {
-            // Load existing indices
             await this.loadIndices(workspacePath);
 
             // Initialize semantic retriever (loads embedding model)
@@ -105,9 +102,7 @@ export class CopilotIntelligenceOrchestrator {
             console.log('CopilotIntelligenceOrchestrator: Initialization complete');
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-            console.error('CopilotIntelligenceOrchestrator: Initialization failed:', errorMsg);
             if (error instanceof Error && error.stack) {
-                console.error('Stack trace:', error.stack);
             }
             this.isInitialized = false;
             throw error;
@@ -139,8 +134,54 @@ export class CopilotIntelligenceOrchestrator {
         const queryIntentGraph = this.queryIntentBuilder.buildQueryIntentGraph(queryText);
         this.graphScorer.loadQueryGraph(queryIntentGraph);
 
+        // Extract key terms for BM25 by removing stop words
+        const stopWords = new Set(['what', 'is', 'the', 'a', 'an', 'are', 'was', 'were', 'be', 'been', 'being',
+                                     'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should',
+                                     'may', 'might', 'must', 'can', 'of', 'at', 'by', 'for', 'with', 'about', 'as',
+                                     'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from',
+                                     'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further',
+                                     'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'both',
+                                     'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not',
+                                     'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'just', 'don',
+                                     'now', 'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you',
+                                     'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself',
+                                     'she', 'her', 'hers', 'herself', 'it', 'its', 'itself', 'they', 'them',
+                                     'their', 'theirs', 'themselves', 'this', 'that', 'these', 'those']);
+        
+        // Query expansion: map domain terms to code equivalents
+        const queryExpansions: { [key: string]: string[] } = {
+            'resume': ['resume', 'cv', 'work', 'experience', 'employment', 'career', 'job', 'certification', 'skill', 'education'],
+            'cv': ['resume', 'cv', 'work', 'experience', 'employment'],
+            'portfolio': ['portfolio', 'project', 'work', 'showcase'],
+            'contact': ['contact', 'email', 'phone', 'social', 'link', 'reach'],
+            'about': ['about', 'bio', 'profile', 'introduction', 'description'],
+            'skills': ['skill', 'ability', 'proficiency', 'competency', 'expertise'],
+            'projects': ['project', 'work', 'portfolio', 'showcase', 'demo'],
+            'experience': ['experience', 'work', 'employment', 'job', 'position', 'role'],
+            'education': ['education', 'degree', 'university', 'college', 'school', 'study'],
+            'certifications': ['certification', 'certificate', 'credential', 'qualification', 'license']
+        };
+        
+        let queryTokens = queryText.toLowerCase().split(/\s+/).filter(t => t.length > 0 && !stopWords.has(t));
+        
+        // Expand query terms with synonyms
+        const expandedTokens = new Set<string>();
+        for (const token of queryTokens) {
+            expandedTokens.add(token);
+            // Check if token matches any expansion key (exact or contains)
+            for (const [key, expansions] of Object.entries(queryExpansions)) {
+                if (token.includes(key) || key.includes(token)) {
+                    expansions.forEach(exp => expandedTokens.add(exp));
+                    break;
+                }
+            }
+        }
+        
+        const searchQuery = Array.from(expandedTokens).join(' ') || queryText;
+        console.log(`[Orchestrator] Query expansion: "${queryText}" → "${searchQuery}"`);
+
         // Step 2: Hybrid Retrieval (BM25 + Semantic)
-        const hybridResults = await this.hybridReranker.search(queryText, topK * 2); // Get more for graph reranking
+        const hybridResults = await this.hybridReranker.search(searchQuery, topK * 2); // Get more for graph reranking
 
         // Step 3: Graph-Aware Reranking
         const graphScoredSymbols = this.graphScorer.scoreSymbols();
@@ -219,8 +260,6 @@ export class CopilotIntelligenceOrchestrator {
         graph: ContextGraph,
         workspacePath: string
     ): Promise<ContextGraph> {
-        console.log('CopilotIntelligenceOrchestrator: Enhancing with Tree-sitter...');
-
         const enhancedNodes = [];
 
         for (const node of graph.nodes) {
@@ -246,7 +285,6 @@ export class CopilotIntelligenceOrchestrator {
                     symbols: enhancedSymbols
                 });
             } catch (error) {
-                console.warn(`Tree-sitter enhancement failed for ${node.filePath}:`, error);
                 enhancedNodes.push(node); // Keep original if enhancement fails
             }
         }

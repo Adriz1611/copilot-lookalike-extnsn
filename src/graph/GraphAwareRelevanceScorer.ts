@@ -77,7 +77,7 @@ export class GraphAwareRelevanceScorer {
      */
     public loadQueryGraph(queryGraph: VirtualQueryGraph): void {
         this.queryGraph = queryGraph;
-        console.log('GraphAwareRelevanceScorer: Loaded query intent graph');
+
     }
 
     /**

@@ -62,7 +62,7 @@ export class SemanticRetriever {
             // @ts-ignore - Type definition issue with transformers
             this.embeddingModel = await pipeline('feature-extraction', this.modelName);
             this.isInitialized = true;
-            console.log('SemanticRetriever: Model loaded successfully');
+
         } catch (error) {
             console.error('SemanticRetriever: Failed to load model:', error);
             throw new Error('Failed to initialize semantic retrieval model');
@@ -85,9 +85,6 @@ export class SemanticRetriever {
         this.documents = [];
         this.documentIndex.clear();
 
-        console.log('SemanticRetriever: Generating embeddings for symbols...');
-
-        // Batch process symbols for efficiency
         const batchSize = 32;
         const symbols = searchIndex.symbolLocations;
 
@@ -115,8 +112,6 @@ export class SemanticRetriever {
                 this.documents.push(doc);
                 this.documentIndex.set(doc.id, doc);
             }
-
-            console.log(`SemanticRetriever: Processed ${Math.min(i + batchSize, symbols.length)}/${symbols.length} symbols`);
         }
 
         // Index file metadata
@@ -179,7 +174,6 @@ export class SemanticRetriever {
                 ...s.doc.metadata
             }));
 
-        console.log(`SemanticRetriever: Found ${results.length} results for query "${query}"`);
         return results;
     }
 
@@ -382,7 +376,7 @@ export class SemanticRetriever {
             documents: this.documents
         };
         await fs.writeFile(path, JSON.stringify(data), 'utf-8');
-        console.log(`SemanticRetriever: Saved embeddings to ${path}`);
+
     }
 
     /**
@@ -394,7 +388,7 @@ export class SemanticRetriever {
         const data = JSON.parse(await fs.readFile(path, 'utf-8'));
         
         if (data.modelName !== this.modelName) {
-            console.warn('SemanticRetriever: Cached model mismatch, regenerating...');
+
             return;
         }
 

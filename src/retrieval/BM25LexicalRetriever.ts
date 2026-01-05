@@ -184,8 +184,6 @@ export class BM25LexicalRetriever {
             }
         }
         
-        console.log(`[BM25] Scored ${scores.length} documents (${candidates.size - scores.length} had score 0)`);
-        
         // Sort by score and return top-k
         const results = scores
             .sort((a, b) => b.score - a.score)
@@ -198,10 +196,6 @@ export class BM25LexicalRetriever {
                     ...doc.metadata
                 };
             });
-        
-        if (results.length > 0) {
-            console.log(`[BM25] Top result: ${results[0].symbol} with score ${results[0].score.toFixed(3)}`);
-        }
         
         return results;
     }
@@ -379,12 +373,6 @@ export class BM25LexicalRetriever {
                 const score = this.calculateBM25Score(i, queryTokens);
                 bestScore = Math.max(bestScore, score);
             }
-        }
-        
-        if (matchedDocs === 0) {
-            console.log(`[BM25] getSymbolScore: Symbol "${symbolName}" not found in ${this.documents.length} documents`);
-        } else {
-            console.log(`[BM25] getSymbolScore: Found ${matchedDocs} docs for "${symbolName}", bestScore=${bestScore.toFixed(3)}`);
         }
         
         return bestScore;

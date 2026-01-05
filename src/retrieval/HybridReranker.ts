@@ -71,7 +71,6 @@ export class HybridReranker {
         // Validate weights sum to 1.0
         const weightSum = this.config.bm25Weight + this.config.semanticWeight;
         if (Math.abs(weightSum - 1.0) > 0.01) {
-            console.warn(`HybridReranker: Weights sum to ${weightSum}, normalizing...`);
             this.config.bm25Weight /= weightSum;
             this.config.semanticWeight /= weightSum;
         }
@@ -284,8 +283,6 @@ export class HybridReranker {
             this.config.bm25Weight /= weightSum;
             this.config.semanticWeight /= weightSum;
         }
-
-        console.log('HybridReranker: Updated configuration', this.config);
     }
 
     private async getBM25Score(query: string, documentId: string): Promise<number> {
