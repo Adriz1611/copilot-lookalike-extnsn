@@ -197,6 +197,24 @@ async function generateIndexWithProgress(
                 // Sanitize for security
                 result.graph = securitySanitizer.sanitizeContextGraph(result.graph);
 
+                // Enhance with Tree-sitter (if Copilot is enabled)
+                if (state.copilotOrchestrator) {
+                    try {
+                        state.outputChannel.appendLine('[Tree-sitter] Enhancing context graph with syntactic analysis...');
+                        const enhanceStartTime = Date.now();
+                        result.graph = await state.copilotOrchestrator.enhanceContextGraphWithTreeSitter(
+                            result.graph,
+                            workspaceFolder.uri.fsPath
+                        );
+                        const enhanceDuration = Date.now() - enhanceStartTime;
+                        state.outputChannel.appendLine(`[Tree-sitter] ✅ Enhancement complete in ${enhanceDuration}ms`);
+                    } catch (error) {
+                        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+                        console.warn('[Tree-sitter] Enhancement failed:', error);
+                        state.outputChannel.appendLine(`[Tree-sitter] ⚠️ Enhancement failed: ${errorMsg}`);
+                    }
+                }
+
                 // Store state
                 state.contextGraph = result.graph;
                 state.incrementalUpdater = new IncrementalUpdater(

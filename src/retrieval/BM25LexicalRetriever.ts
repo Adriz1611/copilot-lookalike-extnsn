@@ -391,6 +391,31 @@ export class BM25LexicalRetriever {
     }
 
     /**
+     * Get max BM25 score in corpus for normalization
+     * Critical for hybrid reranking score combination
+     */
+    public getMaxScore(): number {
+        // Theoretical max BM25 score for this corpus
+        // Used for normalizing scores to [0,1] range
+        let maxIdf = 0;
+        for (const idf of this.idfScores.values()) {
+            if (idf > maxIdf) {
+                maxIdf = idf;
+            }
+        }
+        
+        // Max occurs when all query terms appear with max TF in shortest doc
+        const minDocLength = Math.min(...this.docLengths);
+        const maxTF = Math.max(...this.docLengths); // Approximate
+        
+        // BM25 formula upper bound
+        const numerator = maxTF * (this.k1 + 1);
+        const denominator = maxTF + this.k1 * (1 - this.b + this.b * (minDocLength / this.avgDocLength));
+        
+        return maxIdf * (numerator / denominator);
+    }
+
+    /**
      * Get BM25 score for a specific file (for HybridReranker)
      */
     getFileScore(query: string, filePath: string): number {

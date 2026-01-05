@@ -327,13 +327,19 @@ export class HybridReranker {
 
     /**
      * Normalize BM25 scores to [0, 1] range
-     * BM25 scores are unbounded, so we use a soft normalization
+     * BM25 scores are unbounded, so we use normalization based on corpus max
      */
     private normalizeScore(score: number, type: 'bm25' | 'semantic'): number {
         if (type === 'bm25') {
-            // Soft normalization using sigmoid-like function
-            // Most BM25 scores fall in [0, 20] range
-            return score / (score + 10);
+            // Use actual corpus max score for better normalization
+            const maxScore = this.bm25Retriever.getMaxScore();
+            if (maxScore > 0) {
+                // Linear normalization with soft cap
+                return Math.min(1.0, score / maxScore);
+            } else {
+                // Fallback to sigmoid-like soft normalization
+                return score / (score + 10);
+            }
         } else {
             // Semantic scores are already in [-1, 1] from cosine similarity
             // Map to [0, 1]

@@ -278,19 +278,28 @@ export class SemanticRetriever {
 
     /**
      * Generate embeddings for multiple texts efficiently
+     * Uses true batch processing to leverage model parallelization
      */
     private async batchEmbed(texts: string[]): Promise<number[][]> {
         if (!this.embeddingModel) {
             throw new Error('Embedding model not initialized');
         }
 
-        const embeddings: number[][] = [];
-        for (const text of texts) {
-            const embedding = await this.embed(text);
-            embeddings.push(embedding);
+        // Process texts in parallel batches for better performance
+        const batchSize = 8; // Optimal for transformers.js
+        const allEmbeddings: number[][] = [];
+
+        for (let i = 0; i < texts.length; i += batchSize) {
+            const batch = texts.slice(i, i + batchSize);
+            
+            // Process batch in parallel
+            const batchPromises = batch.map(text => this.embed(text));
+            const batchEmbeddings = await Promise.all(batchPromises);
+            
+            allEmbeddings.push(...batchEmbeddings);
         }
 
-        return embeddings;
+        return allEmbeddings;
     }
 
     /**
