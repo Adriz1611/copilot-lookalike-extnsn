@@ -194,7 +194,11 @@ async function generateIndexWithProgress(
 
                 // Store state
                 state.contextGraph = result.graph;
-                state.incrementalUpdater = new IncrementalUpdater(result.fileHashes);
+                state.incrementalUpdater = new IncrementalUpdater(
+                    result.fileHashes,
+                    (filePath: string, config: GraphConfig) => buildGraphNodeVSCode(filePath, config),
+                    (graph: ContextGraph) => buildCompleteCallGraphVSCode(graph)
+                );
                 state.lastIndexTime = Date.now();
                 state.indexingReport = result.report;
 
@@ -411,17 +415,116 @@ async function performIncrementalUpdate(
     fileScanner: FileScanner
 ): Promise<void> {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder || !state.incrementalUpdater) {
+    if (!workspaceFolder || !state.incrementalUpdater || !state.contextGraph) {
+        vscode.window.showWarningMessage('Please run full indexing first');
         return;
     }
 
-    vscode.window.showInformationMessage('🔄 Checking for changes...');
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Incremental Update',
+            cancellable: true
+        },
+        async (progress, token) => {
+            try {
+                progress.report({ message: '🔍 Detecting changes...' });
 
-    const allFiles = await fileScanner.findCodeFiles(workspaceFolder.uri.fsPath);
-    const changedFiles = await state.incrementalUpdater.detectChangedFiles(allFiles);
+                const allFiles = await fileScanner.findCodeFiles(workspaceFolder.uri.fsPath);
+                const changedFiles = await state.incrementalUpdater!.detectChangedFiles(allFiles);
 
-    vscode.window.showInformationMessage(
-        `✅ Found ${changedFiles.length} changed file(s). Use full reindex for now.`
+                const totalChanges = changedFiles.modified.length + changedFiles.deleted.length + changedFiles.added.length;
+
+                if (totalChanges === 0) {
+                    vscode.window.showInformationMessage('✅ No changes detected');
+                    return;
+                }
+
+                progress.report({ 
+                    message: `📝 Updating ${totalChanges} file(s)...` 
+                });
+
+                state.outputChannel.appendLine(`\n🔄 Incremental Update:`);
+                state.outputChannel.appendLine(`  - Modified: ${changedFiles.modified.length}`);
+                state.outputChannel.appendLine(`  - Deleted: ${changedFiles.deleted.length}`);
+                state.outputChannel.appendLine(`  - Added: ${changedFiles.added.length}`);
+
+                const config: GraphConfig = state.contextGraph!.config;
+                const cancellationAdapter = new VSCodeCancellationTokenAdapter(token);
+
+                // Update graph
+                const updateResult = await state.incrementalUpdater!.updateGraph(
+                    state.contextGraph!,
+                    changedFiles,
+                    config,
+                    cancellationAdapter
+                );
+
+                if (updateResult.errors.length > 0) {
+                    state.outputChannel.appendLine(`  ⚠️ Errors: ${updateResult.errors.length}`);
+                    updateResult.errors.forEach(err => {
+                        state.outputChannel.appendLine(`    - ${err.file}: ${err.error}`);
+                    });
+                }
+
+                // Update state
+                state.contextGraph = updateResult.updatedGraph;
+                state.lastIndexTime = Date.now();
+
+                progress.report({ message: '💾 Saving updated index...' });
+
+                // Save updated indices to disk
+                const securitySanitizer = new SecuritySanitizer();
+                const sanitizedGraph = securitySanitizer.sanitizeContextGraph(updateResult.updatedGraph);
+                
+                // Create minimal report for incremental update
+                const report: IndexingReport = {
+                    totalFiles: state.contextGraph.nodes.length,
+                    successfulFiles: state.contextGraph.nodes.length - updateResult.errors.length,
+                    skippedFiles: 0,
+                    errors: updateResult.errors.map(err => ({
+                        file: err.file,
+                        error: err.error,
+                        timestamp: new Date().toISOString(),
+                        phase: 'parsing' as const
+                    })),
+                    duration: 0,
+                    timestamp: new Date().toISOString()
+                };
+
+                await saveIndicesToDisk(workspaceFolder.uri.fsPath, sanitizedGraph, report);
+
+                // Refresh Copilot orchestrator if initialized
+                if (state.copilotInitialized && state.copilotOrchestrator) {
+                    progress.report({ message: '🤖 Refreshing Copilot intelligence...' });
+                    state.outputChannel.appendLine('  🔄 Refreshing Copilot orchestrator...');
+                    
+                    try {
+                        await state.copilotOrchestrator.initialize(workspaceFolder.uri.fsPath);
+                        state.outputChannel.appendLine('  ✅ Copilot orchestrator refreshed');
+                    } catch (error) {
+                        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+                        state.outputChannel.appendLine(`  ⚠️ Copilot refresh failed: ${errorMsg}`);
+                        console.warn('Copilot refresh failed:', error);
+                    }
+                }
+
+                const successMsg = `✅ Updated ${totalChanges} file(s)` + 
+                    (updateResult.errors.length > 0 ? ` (${updateResult.errors.length} errors)` : '');
+                
+                vscode.window.showInformationMessage(successMsg);
+                state.outputChannel.appendLine('✅ Incremental update complete\n');
+
+            } catch (error) {
+                if (error instanceof Error && error.message.includes('cancelled')) {
+                    vscode.window.showInformationMessage('Update cancelled');
+                } else {
+                    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+                    vscode.window.showErrorMessage(`Incremental update failed: ${errorMsg}`);
+                    state.outputChannel.appendLine(`❌ Update failed: ${errorMsg}`);
+                }
+            }
+        }
     );
 }
 
@@ -438,23 +541,51 @@ function setupFileWatcher(context: vscode.ExtensionContext, state: ExtensionStat
         )
     );
 
+    // Debounce incremental updates - wait 2 seconds after last change
+    let updateTimeout: NodeJS.Timeout | null = null;
+    const pendingChanges = new Set<string>();
+
+    const scheduleIncrementalUpdate = () => {
+        if (updateTimeout) {
+            clearTimeout(updateTimeout);
+        }
+
+        updateTimeout = setTimeout(async () => {
+            if (pendingChanges.size > 0 && state.incrementalUpdater && state.contextGraph) {
+                state.outputChannel.appendLine(`\n🔄 Auto-triggering incremental update for ${pendingChanges.size} changed file(s)...`);
+                pendingChanges.clear();
+                
+                const fileScanner = new FileScanner();
+                await performIncrementalUpdate(state, fileScanner);
+            }
+        }, 2000); // Wait 2 seconds after last change
+    };
+
     watcher.onDidChange((uri) => {
         if (state.contextGraph) {
             console.log('File changed:', uri.fsPath);
-            // Incremental update logic here
+            state.outputChannel.appendLine(`File changed: ${uri.fsPath}`);
+            pendingChanges.add(uri.fsPath);
+            scheduleIncrementalUpdate();
         }
     });
 
     watcher.onDidCreate((uri) => {
         if (state.contextGraph) {
             console.log('File created:', uri.fsPath);
+            state.outputChannel.appendLine(`File created: ${uri.fsPath}`);
+            pendingChanges.add(uri.fsPath);
+            scheduleIncrementalUpdate();
         }
     });
 
     watcher.onDidDelete((uri) => {
         if (state.contextGraph) {
             console.log('File deleted:', uri.fsPath);
+            state.outputChannel.appendLine(`File deleted: ${uri.fsPath}`);
             state.incrementalUpdater?.removeFile(uri.fsPath);
+            pendingChanges.add(uri.fsPath);
+            scheduleIncrementalUpdate();
         }
     });
 
