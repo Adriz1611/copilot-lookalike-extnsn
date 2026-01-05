@@ -32,6 +32,9 @@ import {
     VSCodeCancellationTokenAdapter
 } from './adapters/VSCodeAdapter';
 
+// Import Copilot-like intelligence orchestrator
+import { CopilotIntelligenceOrchestrator } from './orchestrator/CopilotIntelligenceOrchestrator';
+
 // Import VSCode-specific functions (these will remain in extension.ts)
 import {
     buildGraphNodeVSCode,
@@ -47,16 +50,34 @@ interface ExtensionState {
     incrementalUpdater: IncrementalUpdater | null;
     lastIndexTime: number;
     indexingReport: IndexingReport | null;
+    copilotOrchestrator: CopilotIntelligenceOrchestrator | null;
+    copilotInitialized: boolean;
+    outputChannel: vscode.OutputChannel;
+    statusBarItem: vscode.StatusBarItem;
 }
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('LogicGraph extension activated!');
 
+    // Create output channel for debugging
+    const outputChannel = vscode.window.createOutputChannel('LogicGraph');
+    outputChannel.appendLine('LogicGraph extension activated');
+    
+    // Create status bar item
+    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusBarItem.text = '$(search) LogicGraph';
+    statusBarItem.tooltip = 'LogicGraph: Not Indexed';
+    statusBarItem.show();
+
     const state: ExtensionState = {
         contextGraph: null,
         incrementalUpdater: null,
         lastIndexTime: 0,
-        indexingReport: null
+        indexingReport: null,
+        copilotOrchestrator: null,
+        copilotInitialized: false,
+        outputChannel,
+        statusBarItem
     };
 
     // Initialize core modules
@@ -64,6 +85,9 @@ export function activate(context: vscode.ExtensionContext) {
     const securitySanitizer = new SecuritySanitizer();
     const fuzzySearcher = new FuzzySearcher();
     const queryAnalyzer = new QueryAnalyzer();
+    
+    // Initialize Copilot orchestrator (lazy initialization)
+    state.copilotOrchestrator = new CopilotIntelligenceOrchestrator();
 
     // Command: Generate full index
     const indexCommand = vscode.commands.registerCommand(
@@ -177,6 +201,40 @@ async function generateIndexWithProgress(
                 // Save to disk
                 await saveIndicesToDisk(workspaceFolder.uri.fsPath, result.graph, result.report);
 
+                // Initialize Copilot orchestrator with new index
+                if (state.copilotOrchestrator) {
+                    vscode.window.showInformationMessage('🤖 Initializing Copilot intelligence...');
+                    state.outputChannel.appendLine('Starting Copilot orchestrator initialization...');
+                    try {
+                        await state.copilotOrchestrator.initialize(workspaceFolder.uri.fsPath);
+                        state.copilotInitialized = true;
+                        state.statusBarItem.text = '$(sparkle) LogicGraph: Copilot Ready';
+                        state.statusBarItem.tooltip = 'LogicGraph: Copilot Intelligence Active';
+                        vscode.window.showInformationMessage('✨ Copilot intelligence ready!');
+                        state.outputChannel.appendLine('✅ Copilot orchestrator initialized successfully');
+                        
+                        // Log stats
+                        const stats = state.copilotOrchestrator.getStats();
+                        state.outputChannel.appendLine(`  - BM25: ${JSON.stringify(stats.bm25)}`);
+                        state.outputChannel.appendLine(`  - Semantic: ${JSON.stringify(stats.semantic)}`);
+                        state.outputChannel.appendLine(`  - Graph: ${JSON.stringify(stats.graph)}`);
+                    } catch (error) {
+                        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+                        console.warn('Copilot initialization failed:', error);
+                        state.outputChannel.appendLine(`❌ Copilot initialization failed: ${errorMsg}`);
+                        if (error instanceof Error && error.stack) {
+                            state.outputChannel.appendLine(error.stack);
+                        }
+                        state.copilotInitialized = false;
+                        state.statusBarItem.text = '$(search) LogicGraph: Basic';
+                        state.statusBarItem.tooltip = 'LogicGraph: Using Basic Search (Copilot initialization failed)';
+                        vscode.window.showWarningMessage(`Copilot initialization failed: ${errorMsg}. Using basic search.`);
+                    }
+                } else {
+                    state.statusBarItem.text = '$(search) LogicGraph: Indexed';
+                    state.statusBarItem.tooltip = 'LogicGraph: Indexed (Basic search only)';
+                }
+
                 // Show results
                 const successRate = ((result.report.successfulFiles / result.report.totalFiles) * 100).toFixed(1);
                 vscode.window.showInformationMessage(
@@ -215,12 +273,14 @@ async function saveIndicesToDisk(
     // Save files
     const quickPath = path.join(workspacePath, 'quick_index.json');
     const searchPath = path.join(workspacePath, 'search_index.json');
+    const contextGraphPath = path.join(workspacePath, 'context-graph.json');
     const reportDir = path.join(workspacePath, '.logicgraph');
 
     fs.mkdirSync(reportDir, { recursive: true });
 
     fs.writeFileSync(quickPath, JSON.stringify(quickIndex, null, 2), 'utf8');
     fs.writeFileSync(searchPath, JSON.stringify(searchIndex, null, 2), 'utf8');
+    fs.writeFileSync(contextGraphPath, JSON.stringify(graph, null, 2), 'utf8');
 
     const reportPath = path.join(reportDir, 'indexing-report.json');
     fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf8');
@@ -254,18 +314,38 @@ async function queryCodebase(
         return;
     }
 
-    vscode.window.showInformationMessage('🔍 Searching with enhanced intelligence...');
-
+    state.outputChannel.appendLine(`\n🔍 Query: "${query}"`);
+    
     try {
-        const searchIndex = JSON.parse(fs.readFileSync(searchPath, 'utf8'));
-        const results = await fuzzySearcher.search(query, searchIndex);
-
-        // Show results in a new document
-        const doc = await vscode.workspace.openTextDocument({
-            content: formatSearchResults(query, results),
-            language: 'markdown'
-        });
-        await vscode.window.showTextDocument(doc);
+        // Try to use Copilot orchestrator if initialized
+        if (state.copilotOrchestrator && state.copilotInitialized) {
+            vscode.window.showInformationMessage('🤖 Searching with Copilot intelligence...');
+            state.outputChannel.appendLine('Using Copilot Intelligence Orchestrator');
+            const contextAssembly = await state.copilotOrchestrator.queryWithFallback(query, 20);
+            state.outputChannel.appendLine(`Found ${contextAssembly.totalResults} results in ${contextAssembly.processingTime}ms`);
+            
+            // Show enhanced results in a new document
+            const doc = await vscode.workspace.openTextDocument({
+                content: formatEnhancedSearchResults(contextAssembly),
+                language: 'markdown'
+            });
+            await vscode.window.showTextDocument(doc);
+            
+        } else {
+            // Fallback to existing fuzzy search
+            vscode.window.showInformationMessage('🔍 Searching (basic mode)...');
+            state.outputChannel.appendLine(`Using basic fuzzy search (Copilot ${state.copilotOrchestrator ? 'not initialized' : 'not available'})`);
+            const searchIndex = JSON.parse(fs.readFileSync(searchPath, 'utf8'));
+            const results = await fuzzySearcher.search(query, searchIndex);
+            state.outputChannel.appendLine(`Found ${results.length} results`);
+            
+            // Show results in a new document
+            const doc = await vscode.workspace.openTextDocument({
+                content: formatSearchResults(query, results),
+                language: 'markdown'
+            });
+            await vscode.window.showTextDocument(doc);
+        }
 
     } catch (error) {
         vscode.window.showErrorMessage(
@@ -283,6 +363,45 @@ function formatSearchResults(query: string, results: any[]): string {
         output += `- **File**: ${result.file}:${result.line}\n`;
         output += `- **Signature**: \`${result.signature}\`\n\n`;
     }
+
+    return output;
+}
+
+function formatEnhancedSearchResults(contextAssembly: any): string {
+    let output = `# 🤖 Copilot Intelligence Search Results\n\n`;
+    output += `**Query**: "${contextAssembly.query}"\n`;
+    output += `**Intent**: ${contextAssembly.intent}\n`;
+    output += `**Processing Time**: ${contextAssembly.processingTime}ms\n`;
+    output += `**Results**: ${contextAssembly.totalResults}\n\n`;
+    output += `---\n\n`;
+
+    for (let i = 0; i < contextAssembly.results.length; i++) {
+        const result = contextAssembly.results[i];
+        output += `### ${i + 1}. ${result.symbol} (${result.type})\n\n`;
+        output += `- **File**: [${result.file}:${result.line}](${result.file}#L${result.line})\n`;
+        output += `- **Relevance Score**: ${(result.relevanceScore * 100).toFixed(1)}%\n\n`;
+        
+        // Explanation section
+        output += `**Relevance Breakdown**:\n`;
+        output += `- Lexical Match (BM25): ${(result.explanation.lexicalScore * 100).toFixed(1)}%\n`;
+        output += `- Semantic Similarity: ${(result.explanation.semanticScore * 100).toFixed(1)}%\n`;
+        output += `- Graph Relevance: ${(result.explanation.graphScore * 100).toFixed(1)}%\n\n`;
+        
+        if (result.explanation.matchedTerms.length > 0) {
+            output += `**Matched Query Terms**: ${result.explanation.matchedTerms.join(', ')}\n\n`;
+        }
+        
+        if (result.explanation.graphRelationships.length > 0) {
+            output += `**Call Graph Relationships**:\n`;
+            for (const rel of result.explanation.graphRelationships) {
+                output += `- \`${rel}\`\n`;
+            }
+            output += `\n`;
+        }
+    }
+
+    output += `\n---\n\n`;
+    output += `*Powered by Tree-sitter, BM25, Semantic Embeddings, and Graph-Aware Ranking*\n`;
 
     return output;
 }
