@@ -1,8 +1,19 @@
 import { QueryContext } from '../types';
+import * as natural from 'natural';
 
 export class QueryAnalyzer {
+    private stemmer: typeof natural.PorterStemmer;
+
+    constructor() {
+        this.stemmer = natural.PorterStemmer;
+    }
+
     analyzeIntent(query: string): QueryContext {
-        const lowerQuery = query.toLowerCase();
+        if (!query || typeof query !== 'string') {
+            throw new Error('Query must be a non-empty string');
+        }
+        
+        const lowerQuery = query.trim().toLowerCase();
         
         let intent: QueryContext['intent'] = 'search';
         
@@ -67,6 +78,10 @@ export class QueryAnalyzer {
     }
 
     extractSearchTerms(query: string): string[] {
+        if (!query || typeof query !== 'string') {
+            return [];
+        }
+
         const stopWords = new Set([
             'the', 'a', 'an', 'is', 'are', 'was', 'were', 'in', 'on', 'at', 'to', 'for', 
             'of', 'with', 'by', 'from', 'about', 'as', 'into', 'through', 'during', 'how',
@@ -75,8 +90,10 @@ export class QueryAnalyzer {
         ]);
 
         return query
+            .trim()
             .toLowerCase()
             .split(/\W+/)
-            .filter(word => word.length > 2 && !stopWords.has(word));
+            .filter(word => word && word.length > 2 && !stopWords.has(word))
+            .map(word => this.stemmer.stem(word)); // Apply stemming to normalize plural/singular forms
     }
 }

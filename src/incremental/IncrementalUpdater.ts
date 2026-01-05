@@ -21,6 +21,10 @@ export class IncrementalUpdater {
         filePaths: string[],
         cancellationToken?: ICancellationToken
     ): Promise<{ modified: string[]; deleted: string[]; added: string[] }> {
+        if (!Array.isArray(filePaths)) {
+            throw new Error('filePaths must be an array');
+        }
+
         const modified: string[] = [];
         const deleted: string[] = [];
         const added: string[] = [];
@@ -53,7 +57,8 @@ export class IncrementalUpdater {
                     modified.push(filePath);
                 }
             } catch (error) {
-                console.error(`Error checking file ${filePath}:`, error);
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                console.error(`IncrementalUpdater: Error checking file ${filePath}: ${errorMsg}`);
             }
         }
 
@@ -73,6 +78,14 @@ export class IncrementalUpdater {
         config: GraphConfig,
         cancellationToken?: ICancellationToken
     ): Promise<{ updatedGraph: ContextGraph; errors: Array<{ file: string; error: string }> }> {
+        if (!graph || !graph.nodes) {
+            throw new Error('Invalid context graph provided');
+        }
+
+        if (!changedFiles) {
+            throw new Error('changedFiles must be provided');
+        }
+
         const errors: Array<{ file: string; error: string }> = [];
         const updatedGraph = { ...graph };
         const affectedFiles = new Set<string>([...changedFiles.modified, ...changedFiles.deleted, ...changedFiles.added]);
@@ -126,7 +139,13 @@ export class IncrementalUpdater {
             // For now, rebuild entire call graph (can be optimized later)
             await this.buildCompleteCallGraph(updatedGraph);
         } catch (error) {
-            console.error('Error rebuilding call graph:', error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.error('IncrementalUpdater: Error rebuilding call graph:', errorMsg);
+            // Add to errors but don't fail the entire update
+            errors.push({
+                file: '[call-graph]',
+                error: `Call graph rebuild failed: ${errorMsg}`
+            });
         }
 
         updatedGraph.generated = new Date().toISOString();
@@ -135,10 +154,20 @@ export class IncrementalUpdater {
     }
 
     updateHash(filePath: string, hash: string): void {
+        if (!filePath || typeof filePath !== 'string') {
+            throw new Error('Invalid file path provided');
+        }
+        if (!hash || typeof hash !== 'string') {
+            throw new Error('Invalid hash provided');
+        }
         this.fileHashes.set(filePath, hash);
     }
 
     removeFile(filePath: string): void {
+        if (!filePath || typeof filePath !== 'string') {
+            console.warn('IncrementalUpdater: Invalid file path provided to removeFile');
+            return;
+        }
         this.fileHashes.delete(filePath);
     }
 

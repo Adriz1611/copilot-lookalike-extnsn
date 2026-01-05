@@ -68,17 +68,31 @@ export class SecuritySanitizer {
     }
 
     sanitizeText(text: string): string {
+        if (!text || typeof text !== 'string') {
+            return '';
+        }
+
+        if (text.length === 0) {
+            return text;
+        }
+
         let sanitized = text;
         const detectedSecrets: string[] = [];
 
         for (const pattern of this.patterns) {
-            const matches = text.matchAll(pattern.pattern);
-            
-            for (const match of matches) {
-                const secretValue = match[0];
-                const masked = '[REDACTED_' + pattern.name.toUpperCase().replace(/\s+/g, '_') + ']';
-                sanitized = sanitized.replace(secretValue, masked);
-                detectedSecrets.push(pattern.name + ' (' + pattern.severity + ')');
+            try {
+                const matches = text.matchAll(pattern.pattern);
+                
+                for (const match of matches) {
+                    if (match && match[0]) {
+                        const secretValue = match[0];
+                        const masked = '[REDACTED_' + pattern.name.toUpperCase().replace(/\s+/g, '_') + ']';
+                        sanitized = sanitized.replace(secretValue, masked);
+                        detectedSecrets.push(pattern.name + ' (' + pattern.severity + ')');
+                    }
+                }
+            } catch (error) {
+                console.error(`SecuritySanitizer: Error processing pattern ${pattern.name}:`, error);
             }
         }
 
@@ -90,6 +104,11 @@ export class SecuritySanitizer {
     }
 
     sanitizeContextGraph(graph: ContextGraph): ContextGraph {
+        if (!graph || !graph.nodes) {
+            console.error('SecuritySanitizer: Invalid context graph provided');
+            return graph;
+        }
+
         const sanitized: ContextGraph = {
             ...graph,
             nodes: graph.nodes.map(node => ({

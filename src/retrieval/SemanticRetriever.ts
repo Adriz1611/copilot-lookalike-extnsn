@@ -78,6 +78,10 @@ export class SemanticRetriever {
             throw new Error('SemanticRetriever not initialized. Call initialize() first.');
         }
 
+        if (!searchIndex || !Array.isArray(searchIndex.symbolLocations)) {
+            throw new Error('Invalid search index provided');
+        }
+
         this.documents = [];
         this.documentIndex.clear();
 
@@ -140,6 +144,11 @@ export class SemanticRetriever {
      * Returns top-k most semantically similar results
      */
     public async search(query: string, topK: number = 20): Promise<SemanticResult[]> {
+        if (!query || typeof query !== 'string' || query.trim().length === 0) {
+            console.warn('SemanticRetriever: Invalid query provided');
+            return [];
+        }
+
         if (!this.isInitialized || !this.embeddingModel) {
             console.warn('SemanticRetriever: Not initialized');
             return [];

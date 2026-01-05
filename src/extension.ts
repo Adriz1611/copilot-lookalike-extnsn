@@ -57,11 +57,16 @@ interface ExtensionState {
 }
 
 export function activate(context: vscode.ExtensionContext) {
+    const timestamp = () => new Date().toISOString().split('T')[1].slice(0, 8);
+    
     console.log('LogicGraph extension activated!');
 
     // Create output channel for debugging
     const outputChannel = vscode.window.createOutputChannel('LogicGraph');
-    outputChannel.appendLine('LogicGraph extension activated');
+    outputChannel.appendLine(`[${timestamp()}] LogicGraph extension activated`);
+    outputChannel.appendLine(`[${timestamp()}] Version: ${context.extension.packageJSON.version || '1.0.0'}`);
+    outputChannel.appendLine(`[${timestamp()}] Workspace: ${vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || 'none'}`);
+    outputChannel.appendLine('---');
     
     // Create status bar item
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -207,27 +212,29 @@ async function generateIndexWithProgress(
 
                 // Initialize Copilot orchestrator with new index
                 if (state.copilotOrchestrator) {
+                    const initStartTime = Date.now();
                     vscode.window.showInformationMessage('🤖 Initializing Copilot intelligence...');
-                    state.outputChannel.appendLine('Starting Copilot orchestrator initialization...');
+                    state.outputChannel.appendLine('[Copilot] Starting initialization...');
                     try {
                         await state.copilotOrchestrator.initialize(workspaceFolder.uri.fsPath);
+                        const initDuration = Date.now() - initStartTime;
                         state.copilotInitialized = true;
                         state.statusBarItem.text = '$(sparkle) LogicGraph: Copilot Ready';
                         state.statusBarItem.tooltip = 'LogicGraph: Copilot Intelligence Active';
                         vscode.window.showInformationMessage('✨ Copilot intelligence ready!');
-                        state.outputChannel.appendLine('✅ Copilot orchestrator initialized successfully');
+                        state.outputChannel.appendLine(`[Copilot] ✅ Initialized successfully in ${initDuration}ms`);
                         
                         // Log stats
                         const stats = state.copilotOrchestrator.getStats();
-                        state.outputChannel.appendLine(`  - BM25: ${JSON.stringify(stats.bm25)}`);
-                        state.outputChannel.appendLine(`  - Semantic: ${JSON.stringify(stats.semantic)}`);
-                        state.outputChannel.appendLine(`  - Graph: ${JSON.stringify(stats.graph)}`);
+                        state.outputChannel.appendLine(`[Copilot] BM25: ${JSON.stringify(stats.bm25)}`);
+                        state.outputChannel.appendLine(`[Copilot] Semantic: ${JSON.stringify(stats.semantic)}`);
+                        state.outputChannel.appendLine(`[Copilot] Graph: ${JSON.stringify(stats.graph)}`);
                     } catch (error) {
                         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-                        console.warn('Copilot initialization failed:', error);
-                        state.outputChannel.appendLine(`❌ Copilot initialization failed: ${errorMsg}`);
+                        console.warn('[Copilot] Initialization failed:', error);
+                        state.outputChannel.appendLine(`[Copilot] ❌ Initialization failed: ${errorMsg}`);
                         if (error instanceof Error && error.stack) {
-                            state.outputChannel.appendLine(error.stack);
+                            state.outputChannel.appendLine(`[Copilot] Stack: ${error.stack}`);
                         }
                         state.copilotInitialized = false;
                         state.statusBarItem.text = '$(search) LogicGraph: Basic';
@@ -270,9 +277,14 @@ async function saveIndicesToDisk(
     graph: ContextGraph,
     report: IndexingReport
 ): Promise<void> {
-    // Generate indices
-    const quickIndex = generateQuickIndex(graph, workspacePath);
-    const searchIndex = generateSearchIndex(graph, workspacePath);
+    if (!workspacePath || !graph || !report) {
+        throw new Error('Invalid parameters provided to saveIndicesToDisk');
+    }
+
+    try {
+        // Generate indices
+        const quickIndex = generateQuickIndex(graph, workspacePath);
+        const searchIndex = generateSearchIndex(graph, workspacePath);
 
     // Save files
     const quickPath = path.join(workspacePath, 'quick_index.json');
@@ -288,6 +300,11 @@ async function saveIndicesToDisk(
 
     const reportPath = path.join(reportDir, 'indexing-report.json');
     fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf8');
+    } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Failed to save indices to disk:', errorMsg);
+        throw new Error(`Failed to save indices: ${errorMsg}`);
+    }
 }
 
 async function queryCodebase(
@@ -311,22 +328,33 @@ async function queryCodebase(
     // Get query
     const query = await vscode.window.showInputBox({
         prompt: 'What do you want to know about the codebase?',
-        placeHolder: 'e.g., Find authentication logic, Show database queries, What calls loginUser?'
+        placeHolder: 'e.g., Find authentication logic, Show database queries, What calls loginUser?',
+        validateInput: (value) => {
+            if (!value || value.trim().length === 0) {
+                return 'Query cannot be empty';
+            }
+            if (value.length > 500) {
+                return 'Query too long (max 500 characters)';
+            }
+            return null;
+        }
     });
 
-    if (!query) {
+    if (!query || query.trim().length === 0) {
         return;
     }
 
     state.outputChannel.appendLine(`\n🔍 Query: "${query}"`);
     
+    const queryStartTime = Date.now();
     try {
         // Try to use Copilot orchestrator if initialized
         if (state.copilotOrchestrator && state.copilotInitialized) {
             vscode.window.showInformationMessage('🤖 Searching with Copilot intelligence...');
-            state.outputChannel.appendLine('Using Copilot Intelligence Orchestrator');
+            state.outputChannel.appendLine('[Query] Using Copilot Intelligence Orchestrator');
             const contextAssembly = await state.copilotOrchestrator.queryWithFallback(query, 20);
-            state.outputChannel.appendLine(`Found ${contextAssembly.totalResults} results in ${contextAssembly.processingTime}ms`);
+            const queryDuration = Date.now() - queryStartTime;
+            state.outputChannel.appendLine(`[Query] Found ${contextAssembly.totalResults} results in ${queryDuration}ms (orchestrator: ${contextAssembly.processingTime}ms)`);
             
             // Show enhanced results in a new document
             const doc = await vscode.workspace.openTextDocument({
@@ -338,10 +366,11 @@ async function queryCodebase(
         } else {
             // Fallback to existing fuzzy search
             vscode.window.showInformationMessage('🔍 Searching (basic mode)...');
-            state.outputChannel.appendLine(`Using basic fuzzy search (Copilot ${state.copilotOrchestrator ? 'not initialized' : 'not available'})`);
+            state.outputChannel.appendLine(`[Query] Using basic fuzzy search (Copilot ${state.copilotOrchestrator ? 'not initialized' : 'not available'})`);
             const searchIndex = JSON.parse(fs.readFileSync(searchPath, 'utf8'));
             const results = await fuzzySearcher.search(query, searchIndex);
-            state.outputChannel.appendLine(`Found ${results.length} results`);
+            const queryDuration = Date.now() - queryStartTime;
+            state.outputChannel.appendLine(`[Query] Found ${results.length} results in ${queryDuration}ms`);
             
             // Show results in a new document
             const doc = await vscode.workspace.openTextDocument({
@@ -352,38 +381,64 @@ async function queryCodebase(
         }
 
     } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        state.outputChannel.appendLine(`❌ Search failed: ${errorMsg}`);
+        if (error instanceof Error && error.stack) {
+            state.outputChannel.appendLine(error.stack);
+        }
         vscode.window.showErrorMessage(
-            `Search failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+            `Search failed: ${errorMsg}. Check output for details.`
         );
     }
 }
 
 function formatSearchResults(query: string, results: any[]): string {
+    if (!query) {
+        query = '(no query)';
+    }
+    if (!Array.isArray(results)) {
+        return '# Error: Invalid results';
+    }
+
     let output = `# Search Results for: "${query}"\n\n`;
     output += `Found ${results.length} relevant symbols\n\n`;
 
     for (const result of results) {
-        output += `## \`${result.symbol}\` (${result.type})\n`;
-        output += `- **File**: ${result.file}:${result.line}\n`;
-        output += `- **Signature**: \`${result.signature}\`\n\n`;
+        if (!result || !result.symbol) {
+            continue; // Skip invalid results
+        }
+        output += `## \`${result.symbol}\` (${result.type || 'unknown'})\n`;
+        output += `- **File**: ${result.file || 'unknown'}:${result.line || 0}\n`;
+        output += `- **Signature**: \`${result.signature || 'N/A'}\`\n\n`;
+    }
+
+    if (results.length === 0) {
+        output += '\n*No results found. Try refining your search query.*\n';
     }
 
     return output;
 }
 
 function formatEnhancedSearchResults(contextAssembly: any): string {
+    if (!contextAssembly) {
+        return '# Error: Invalid context assembly';
+    }
+
     let output = `# 🤖 Copilot Intelligence Search Results\n\n`;
-    output += `**Query**: "${contextAssembly.query}"\n`;
-    output += `**Intent**: ${contextAssembly.intent}\n`;
-    output += `**Processing Time**: ${contextAssembly.processingTime}ms\n`;
-    output += `**Results**: ${contextAssembly.totalResults}\n\n`;
+    output += `**Query**: "${contextAssembly.query || 'N/A'}"\n`;
+    output += `**Intent**: ${contextAssembly.intent || 'unknown'}\n`;
+    output += `**Processing Time**: ${contextAssembly.processingTime || 0}ms\n`;
+    output += `**Results**: ${contextAssembly.totalResults || 0}\n\n`;
     output += `---\n\n`;
 
-    for (let i = 0; i < contextAssembly.results.length; i++) {
-        const result = contextAssembly.results[i];
-        output += `### ${i + 1}. ${result.symbol} (${result.type})\n\n`;
-        output += `- **File**: [${result.file}:${result.line}](${result.file}#L${result.line})\n`;
-        output += `- **Relevance Score**: ${(result.relevanceScore * 100).toFixed(1)}%\n\n`;
+    const results = contextAssembly.results || [];
+    for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        if (!result) continue;
+        
+        output += `### ${i + 1}. ${result.symbol || 'unknown'} (${result.type || 'unknown'})\n\n`;
+        output += `- **File**: [${result.file || 'unknown'}:${result.line || 0}](${result.file || '#'}#L${result.line || 0})\n`;
+        output += `- **Relevance Score**: ${((result.relevanceScore || 0) * 100).toFixed(1)}%\n\n`;
         
         // Explanation section
         output += `**Relevance Breakdown**:\n`;

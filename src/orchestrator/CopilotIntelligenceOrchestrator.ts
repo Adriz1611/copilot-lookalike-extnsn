@@ -104,7 +104,12 @@ export class CopilotIntelligenceOrchestrator {
             this.isInitialized = true;
             console.log('CopilotIntelligenceOrchestrator: Initialization complete');
         } catch (error) {
-            console.error('CopilotIntelligenceOrchestrator: Initialization failed:', error);
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+            console.error('CopilotIntelligenceOrchestrator: Initialization failed:', errorMsg);
+            if (error instanceof Error && error.stack) {
+                console.error('Stack trace:', error.stack);
+            }
+            this.isInitialized = false;
             throw error;
         }
     }
@@ -118,9 +123,17 @@ export class CopilotIntelligenceOrchestrator {
             throw new Error('Orchestrator not initialized. Call initialize() first.');
         }
 
+        if (!queryText || typeof queryText !== 'string' || queryText.trim().length === 0) {
+            throw new Error('Invalid query: must be a non-empty string');
+        }
+
+        if (topK <= 0 || topK > 1000) {
+            topK = 20; // Use default for invalid values
+        }
+
         const startTime = Date.now();
 
-        console.log(`CopilotIntelligenceOrchestrator: Processing query "${queryText}"`);
+        console.log(`CopilotIntelligenceOrchestrator: Processing query "${queryText.substring(0, 50)}..."`);
 
         // Step 1: Build Query Intent Graph
         const queryIntentGraph = this.queryIntentBuilder.buildQueryIntentGraph(queryText);

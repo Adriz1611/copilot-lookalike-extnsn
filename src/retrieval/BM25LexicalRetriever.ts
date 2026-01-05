@@ -14,6 +14,7 @@
  */
 
 import { SearchIndex, SymbolLocation, FileMetadata } from '../types';
+import * as natural from 'natural';
 
 interface BM25Document {
     id: string; // Unique document identifier
@@ -43,6 +44,7 @@ export class BM25LexicalRetriever {
     private avgDocLength: number;
     private idfScores: Map<string, number>;
     private totalDocs: number;
+    private stemmer: typeof natural.PorterStemmer;
 
     // BM25 parameters (tuned for code search)
     private readonly k1 = 1.5; // Term frequency saturation (higher = more weight to term freq)
@@ -56,12 +58,17 @@ export class BM25LexicalRetriever {
         this.avgDocLength = 0;
         this.idfScores = new Map();
         this.totalDocs = 0;
+        this.stemmer = natural.PorterStemmer;
     }
 
     /**
      * Index a search index for BM25 retrieval
      */
     indexSearchIndex(searchIndex: SearchIndex): void {
+        if (!searchIndex || !Array.isArray(searchIndex.symbolLocations)) {
+            throw new Error('[BM25] Invalid search index provided');
+        }
+
         console.log(`[BM25] Indexing ${searchIndex.symbolLocations.length} symbols...`);
         
         this.documents = [];
@@ -142,8 +149,18 @@ export class BM25LexicalRetriever {
      * Search for symbols matching a query
      */
     search(query: string, topK: number = 10): BM25Result[] {
-        if (this.documents.length === 0) {
+        if (!query || typeof query !== 'string') {
+            console.warn('[BM25] Invalid query provided');
             return [];
+        }
+
+        if (this.documents.length === 0) {
+            console.warn('[BM25] No documents indexed');
+            return [];
+        }
+
+        if (topK <= 0) {
+            topK = 10;
         }
         
         const queryTokens = this.tokenize(query);
@@ -252,30 +269,35 @@ export class BM25LexicalRetriever {
     }
 
     /**
-     * Tokenize text into searchable tokens
+     * Tokenize text into searchable tokens with stemming
      */
     private tokenize(text: string): string[] {
+        if (!text || typeof text !== 'string') {
+            return [];
+        }
+
         // Handle camelCase BEFORE lowercasing
         const expandedTokens: string[] = [];
         
         // Split on non-alphanumeric characters first
-        const tokens = text.split(/[^a-zA-Z0-9]+/).filter(t => t.length > 0);
+        const tokens = text.split(/[^a-zA-Z0-9]+/).filter(t => t && t.length > 0);
         
         for (const token of tokens) {
-            // Add the whole token (lowercased)
-            expandedTokens.push(token.toLowerCase());
+            // Add the whole token (lowercased and stemmed)
+            const lowerToken = token.toLowerCase();
+            expandedTokens.push(this.stemmer.stem(lowerToken));
             
             // Split camelCase (before lowercasing)
             // Matches: lowercase followed by uppercase, or multiple uppercase followed by lowercase
             const camelParts = token.split(/(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/).filter(t => t.length > 0);
             if (camelParts.length > 1) {
-                expandedTokens.push(...camelParts.map(p => p.toLowerCase()));
+                expandedTokens.push(...camelParts.map(p => this.stemmer.stem(p.toLowerCase())));
             }
             
             // Split snake_case
             const snakeParts = token.split('_').filter(t => t.length > 0);
             if (snakeParts.length > 1) {
-                expandedTokens.push(...snakeParts.map(p => p.toLowerCase()));
+                expandedTokens.push(...snakeParts.map(p => this.stemmer.stem(p.toLowerCase())));
             }
         }
         
@@ -342,6 +364,10 @@ export class BM25LexicalRetriever {
      * Get BM25 score for a specific symbol (for HybridReranker)
      */
     getSymbolScore(query: string, symbolName: string): number {
+        if (!query || !symbolName) {
+            return 0;
+        }
+
         const queryTokens = this.tokenize(query);
         
         // Find all documents matching this symbol name
@@ -368,6 +394,10 @@ export class BM25LexicalRetriever {
      * Get BM25 score for a specific file (for HybridReranker)
      */
     getFileScore(query: string, filePath: string): number {
+        if (!query || !filePath) {
+            return 0;
+        }
+
         const queryTokens = this.tokenize(query);
         
         // Find all documents in this file

@@ -82,17 +82,28 @@ export class HybridReranker {
      * Combines BM25 and semantic retrieval for best results
      */
     public async search(query: string, topK?: number): Promise<HybridResult[]> {
-        const finalTopK = topK || this.config.finalTopK;
+        if (!query || typeof query !== 'string' || query.trim().length === 0) {
+            console.warn('HybridReranker: Invalid query provided');
+            return [];
+        }
+
+        const finalTopK = topK && topK > 0 ? topK : this.config.finalTopK;
 
         console.log(`HybridReranker: Starting hybrid search for "${query}"`);
 
-        // Step 1: Retrieve candidates from both systems
-        const bm25Results = this.bm25Retriever.search(query, this.config.retrievalTopK);
-        const semanticResults = await this.semanticRetriever.search(query, this.config.retrievalTopK);
+        try {
+            // Step 1: Retrieve candidates from both systems
+            const bm25Results = this.bm25Retriever.search(query, this.config.retrievalTopK);
+            const semanticResults = await this.semanticRetriever.search(query, this.config.retrievalTopK);
 
-        console.log(`HybridReranker: BM25 found ${bm25Results.length}, Semantic found ${semanticResults.length}`);
+            console.log(`HybridReranker: BM25 found ${bm25Results.length}, Semantic found ${semanticResults.length}`);
 
-        // Step 2: Merge results and create score maps
+            if (bm25Results.length === 0 && semanticResults.length === 0) {
+                console.warn('HybridReranker: No results from either retriever');
+                return [];
+            }
+
+            // Step 2: Merge results and create score maps
         const bm25ScoreMap = new Map<string, number>();
         const bm25RankMap = new Map<string, number>();
         bm25Results.forEach((result, index) => {
@@ -190,6 +201,11 @@ export class HybridReranker {
 
         console.log(`HybridReranker: Returning top ${finalResults.length} results (computed ${onDemandCount} BM25 scores on-demand)`);
         return finalResults;
+        } catch (error) {
+            console.error('HybridReranker: Search failed:', error);
+            // Return empty results on error rather than throwing
+            return [];
+        }
     }
 
     /**
